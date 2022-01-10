@@ -1,23 +1,25 @@
 ---
 - name: Restart BeeGFS mgmt service
   systemd:
-    name: beegfs-mgmtd
+    name: "beegfs-mgmtd@{{ item.port_tcp | default('8008') }}"
     daemon-reload: true
     state: restarted
   become: true
+  with_items: "{{ beegfs_mgmt }}"
   when: beegfs_enable.mgmt | bool
 
 - name: Restart BeeGFS meta service
   systemd:
-    name: beegfs-meta
+    name: "beegfs-meta@{{ item.port_tcp | default('8005') }}"
     daemon-reload: true
     state: restarted
   become: true
+  with_items: "{{ beegfs_meta }}"
   when: beegfs_enable.meta | bool
 
 - name: Restart BeeGFS storage service
   systemd:
-    name: "beegfs-storage@{{ item.port }}"
+    name: "beegfs-storage@{{ item.port_tcp }}"
     daemon-reload: true
     state: restarted
   become: true

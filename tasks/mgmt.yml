@@ -6,25 +6,53 @@
   become: true
   notify: Restart BeeGFS mgmt service
 
+- name: Store variable in updatable var
+  set_fact:
+    mgmtd: "{{ mgmt_item }}"
+
+- name: Set default mgmtd port
+  set_fact:
+    mgmtd: "{{ mgmtd | combine({'port_tcp': '8008'}) }}"
+  when: mgmtd.port_tcp is not defined
+
+- name: Set default mgmtd config path
+  set_fact:
+    mgmtd: "{{ mgmtd | combine({'config_path': '/etc/beegfs/' + (mgmtd.port_tcp | string) + '.d/beegfs-mgmtd.conf'}) }}"
+  when: mgmtd.config_path is not defined
+
+- name: Set default mgmtd directory
+  set_fact:
+    mgmtd: "{{ mgmtd | combine({'directory': '/data/beegfs/beegfs_mgmtd/' + (mgmtd.port_tcp | string) }) }}"
+  when: mgmtd.directory is not defined
+
 - name: Create directory for BeeGFS management service data
   file:
-    path: "{{ beegfs_mgmt_path }}"
+    path: "{{ mgmtd.directory }}"
     state: directory
   become: true
   notify: Restart BeeGFS mgmt service
 
-- name: Run management service setup script
-  command: "/opt/beegfs/sbin/beegfs-setup-mgmtd -p {{ beegfs_mgmt_path }} -f"
-  args:
-    creates: "{{ beegfs_mgmt_path }}/originalNodeID"
+- name: Create directory for config file
+  file:
+    path: "{{ mgmtd.config_path | dirname }}"
+    state: directory
   become: true
   notify: Restart BeeGFS mgmt service
 
-- name: Specify connInterfacesFile
-  lineinfile:
-    path: /etc/beegfs/beegfs-mgmtd.conf
-    regexp: "^connInterfacesFile"
-    line: "connInterfacesFile           = /etc/beegfs/connInterfacesFile"
+- name: "Copy {{ mgmtd.config_path }}"
+  template:
+    src: "beegfs-mgmtd.conf.j2"
+    dest: "{{ mgmtd.config_path }}"
   become: true
   notify: Restart BeeGFS mgmt service
-...
+
+- name: Run management service setup script
+  command: |
+    /opt/beegfs/sbin/beegfs-setup-mgmtd -f -C \
+    -p {{ mgmtd.directory }} \
+    -c {{ mgmtd.config_path }}
+  args:
+    creates: "{{ mgmtd.directory }}/originalNodeID"
+  become: true
+  notify: Restart BeeGFS mgmt service
+

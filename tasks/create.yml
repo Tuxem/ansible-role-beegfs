@@ -85,7 +85,7 @@
         - { name: "beegfs-mon.service", enable: "{{ beegfs_enable.mon }}" }
     - name: Stop BeeGFS storage services
       vars:
-        service_name: "beegfs-storage@{{ item.port }}.service"
+        service_name: "beegfs-storage@{{ item.port_tcp }}.service"
       service:
         name: "{{ service_name }}"
         state: stopped
@@ -127,16 +127,24 @@
   when: beegfs_rdma | bool
 
 - include_tasks: mgmt.yml
+  loop: "{{ beegfs_mgmt }}"
+  loop_control:
+    loop_var: mgmt_item
   when: beegfs_enable.mgmt | default(false) | bool
 
 - include_tasks: mon.yml
   when: beegfs_enable.mon | default(false) | bool
 
 - include_tasks: meta.yml
+  loop: "{{ beegfs_meta }}"
+  loop_control:
+    loop_var: meta_item
   when: beegfs_enable.meta | default(false) | bool
 
 - include_tasks: oss.yml
   vars:
+    mgmtd_host: "{{ oss_item.mgmtd_host | default(beegfs_mgmt_host) }}"
+    mgmtd_port: "{{ oss_item.mgmtd_port | default(beegfs_mgmt_port) }}"
     oss_dev: "{{ oss_item.dev | default('') }}"
     oss_dev_is_defined: "{{ oss_item.dev is defined }}"
     oss_path: "{{ oss_item.path | default(beegfs_oss_path_prefix + oss_dev) }}"
@@ -164,15 +172,10 @@
 - meta: flush_handlers
 
 - include_tasks: client.yml
-  vars:
-    client_mgmt_host: "{{ client_item.mgmt_host | default(beegfs_mgmt_host) }}"
-    client_path: "{{ client_item.path }}"
-    client_port: "{{ client_item.port }}"
   with_items: "{{ beegfs_client }}"
   loop_control:
     loop_var: client_item
   when: beegfs_enable.client | default(false) | bool
-
 
 - name: Start and enable BeeGFS server services
   service:
@@ -189,7 +192,7 @@
 
 - name: Start and enable BeeGFS storage services
   service:
-    name: "beegfs-storage@{{ item.port }}"
+    name: "beegfs-storage@{{ item.port_tcp }}"
     enabled: true
     state: started
   become: true

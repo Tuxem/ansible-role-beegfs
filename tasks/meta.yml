@@ -6,12 +6,55 @@
   become: true
   notify: Restart BeeGFS meta service
 
+- name: Store variable in updatable var
+  set_fact:
+    meta: "{{ meta_item }}"
+
+- name: Set default mgmtd port
+  set_fact:
+    meta: "{{ meta | combine({'port_tcp': '8005'}) }}"
+  when: meta.port_tcp is not defined
+
+- name: Set default meta config path
+  set_fact:
+    meta: "{{ meta | combine({'config_path': '/etc/beegfs/' + (meta.port_tcp | string) + '.d/beegfs-meta.conf'}) }}"
+  when: meta.config_path is not defined
+
+- name: Set default meta directory
+  set_fact:
+    meta: "{{ meta | combine({'directory': '/data/beegfs/beegfs_meta/' + (meta.port_tcp | string) }) }}"
+  when: meta.directory is not defined
+
 - name: Create directory for BeeGFS metadata
   file:
-    path: "{{ beegfs_meta_path }}"
+    path: "{{ meta.directory }}"
     state: directory
   become: true
   notify: Restart BeeGFS meta service
+
+- name: Get device where metadata are stored
+  shell:
+    cmd: "realpath $(df {{ meta.directory }} | grep '^/' | cut -d' ' -f1)"
+  register: _meta_device_path
+  changed_when: False
+
+- name: Set FsUUID
+  set_fact:
+    meta: "{{ meta | combine({'fsuuid': ansible_facts['devices'][_meta_device_path.stdout|basename]['links']['uuids'][0] }) }}"
+
+- name: Create directory for BeeGFS meta config
+  file:
+    path: "{{ meta.config_path | dirname }}"
+    state: directory
+  become: true
+  notify: Restart BeeGFS meta service
+
+- name: "Copy {{ meta.config_path }}"
+  template:
+    src: "beegfs-meta.conf.j2"
+    dest: "{{ meta.config_path }}"
+  become: true
+  notify: Restart BeeGFS mgmt service
 
 - name: Prepare metadata block storage
   block:
@@ -40,33 +83,13 @@
     - beegfs_meta_dev != None
 
 - name: Run metadata service setup script
-  command: "/opt/beegfs/sbin/beegfs-setup-meta -p {{ beegfs_meta_path }} -m {{ beegfs_mgmt_host }} {{ '-s ' + (beegfs_node_num_id | string) if beegfs_node_num_id }} -f"
+  command: |
+    /opt/beegfs/sbin/beegfs-setup-meta -f -C \
+    -p {{ meta.directory }} \
+    -m {{ meta.mgmtd_host }} \
+    -c {{ meta.config_path }} \
+    {% if 'node_num_id' in meta %}{{ '-s ' + (meta.node_num_id | string) }}{% endif %}
   args:
-    creates: "{{ beegfs_meta_path }}/originalNodeID"
+    creates: "{{ meta.directory }}/originalNodeID"
   become: true
   notify: Restart BeeGFS meta service
-
-- name: Specify connInterfacesFile
-  lineinfile:
-    path: /etc/beegfs/beegfs-meta.conf
-    regexp: "^connInterfacesFile"
-    line: "connInterfacesFile           = /etc/beegfs/connInterfacesFile"
-  become: true
-  notify: Restart BeeGFS meta service
-
-- name: Modify tuneTargetChooser settings
-  lineinfile:
-    path: /etc/beegfs/beegfs-meta.conf
-    regexp: "^tuneTargetChooser"
-    line: "tuneTargetChooser            = {{ beegfs_meta_tuneTargetChooser }}"
-  become: true
-  notify: Restart BeeGFS meta service
-
-- name: Modify tuneNumWorkers settings
-  lineinfile:
-    path: /etc/beegfs/beegfs-meta.conf
-    regexp: "^tuneNumWorkers"
-    line: "tuneNumWorkers               = {{ beegfs_meta_tuneNumWorkers }}"
-  become: true
-  notify: Restart BeeGFS meta service
-...

@@ -1,3 +1,3 @@
 {% for item in beegfs_client %}
-{{ item.path }} /etc/beegfs/beegfs-client-{{ item.mgmt_host | default(beegfs_mgmt_host) }}.conf
+{{ item.path }} /etc/beegfs/beegfs-client-{{ item.mgmtd_host | default(beegfs_mgmt_host) }}.{{ item.mgmtd_port_tcp | default(8008) }}.conf
 {% endfor %}
