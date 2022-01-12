@@ -14,6 +14,11 @@
   set_fact:
     client: "{{ client_item }}"
 
+- name: Set default mgmtd_host
+  set_fact:
+    client: "{{ client | combine({'mgmtd_host': beegfs_mgmt_host }) }}"
+  when: client.mgmtd_host is not defined
+
 - name: Set default client port
   set_fact:
     client: "{{ client | combine({'port_tcp': '8003'}) }}"
