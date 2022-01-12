@@ -39,38 +39,66 @@ Say we have an inventory that looks like this (`inventory-beegfs`):
 
 And a corresponding playbook as this (`beegfs.yml`):
 
-    ---
-    - hosts:
-      - cluster_beegfs_mgmt
-      - cluster_beegfs_mds
-      - cluster_beegfs_oss
-      - cluster_beegfs_client
-      roles:
-      - role: stackhpc.beegfs
-        beegfs_enable:
-          mon: false
-          mgmt: "{{ inventory_hostname in groups['cluster_beegfs_mgmt'] }}"
-          meta: "{{ inventory_hostname in groups['cluster_beegfs_mds'] }}"
-          oss: "{{ inventory_hostname in groups['cluster_beegfs_oss'] }}"
-          tuning: "{{ inventory_hostname in groups['cluster_beegfs_oss'] }}"
-          client: "{{ inventory_hostname in groups['cluster_beegfs_client'] }}"
-        beegfs_oss:
+```
+---
+- hosts:
+    - beegfs_mgmt
+    - beegfs_mds
+    - beegfs_oss
+    - beegfs_client
+  roles:
+    - role: beegfs
+      beegfs_enable:
+        mon: false
+        mgmt: "{{ inventory_hostname in groups['beegfs_mgmt'] }}"
+        meta: "{{ inventory_hostname in groups['beegfs_mds'] }}"
+        oss: "{{ inventory_hostname in groups['beegfs_oss'] }}"
+        tuning: "{{ inventory_hostname in groups['beegfs_oss'] }}"
+        client: "{{ inventory_hostname in groups['beegfs_client'] }}"
+      beegfs_oss:
         - dev: "/dev/sdb"
-          port: 8003
+          port_tcp: 8003
+          mgmtd_port: 8008 # scratch
+          mgmtd_host: storage01.li.nux
         - dev: "/dev/sdc"
-          port: 8103
+          port_tcp: 8003
+          mgmtd_port: 8008 # scratch
+          mgmtd_host: storage01.li.nux
         - dev: "/dev/sdd"
-          port: 8203
-        beegfs_mgmt_host: "{{ groups['cluster_beegfs_mgmt'] | first }}"
-        beegfs_client:
-        - path: "/mnt/beegfs"
+          port_tcp: 8203
+          mgmtd_port: 8208 # work
+          mgmtd_host: storage01.li.nux
+      beegfs_meta:
+        - port_tcp: 8005
+          mgmtd_port: 8008
+          mgmtd_host: storage01.li.nux
+          directory: /data/beegfs/beegfs_meta/8005
+        - port_tcp: 8205
+          mgmtd_port: 8208
+          mgmtd_host: storage01.li.nux
+          directory: /data/beegfs/beegfs_meta/8205
+      beegfs_mgmt:
+        - port_tcp: 8008
+          directory: /data/beegfs/beegfs_mgmtd/8008
+        - port_tcp: 8208
+          directory: /data/beegfs/beegfs_mgmtd/8208
+      beegfs_mgmt_host: "{{ groups['beegfs_mgmt'] | first }}"
+      beegfs_client:
+        - path: "/mnt/scratch"
           port: 8004
-        beegfs_fstype: "xfs"
-        beegfs_force_format: false
-        beegfs_interfaces: ["ib0"]
-        beegfs_rdma: true
-        beegfs_state: present
-    ...
+          mgmtd_host: storage01.li.nux
+          mgmtd_port_tcp: 8008
+        - path: "/mnt/work"
+          port: 8204
+          mgmtd_host: storage01.li.nux
+          mgmtd_port_tcp: 8208
+      beegfs_fstype: "xfs"
+      beegfs_force_format: false
+      beegfs_interfaces: ["enp0s3"]
+      beegfs_rdma: false
+      beegfs_state: present
+...
+```  
 
 To create a cluster:
 
